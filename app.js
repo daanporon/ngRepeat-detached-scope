@@ -79,11 +79,14 @@
             ngRepeat.compile = function() {
 
                 return function($scope, $element, $attrs) {
-                    var new$Scope = $scope.$new(),
+                    var new$Scope = $scope,
                         args =  Array.prototype.slice.call(arguments),
-                        original$New = new$Scope.$new;
+                        original$New;
 
                     if ($attrs.hasOwnProperty('repeatDetached')) {
+                        new$Scope = $scope.$new();
+                        original$New = new$Scope.$new;
+
                         new$Scope.$new = function () {
                             var childScope = original$New.apply(new$Scope, Array.prototype.slice.call(arguments));
                             childScope.$new = original$New;
