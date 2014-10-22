@@ -92,7 +92,7 @@
                             childScope.$new = original$New;
 
                             var detachedScope = childScope.$new();
-                            childScope.$$childHead = childScope.$$childTail = null;
+
 
                             childScope.$on('digest', function (event, index) {
                                 if (angular.isUndefined(index) || index === detachedScope.$index) {
@@ -105,7 +105,7 @@
                             // kan misschien beter ... misschien evalAsync
                             // for now just digest one time in the next digestCycle :)
                             $timeout(function() {
-                                detachedScope.$digest();
+                                childScope.$$childHead = childScope.$$childTail = null;
                             });
 
                             return detachedScope;
