@@ -15,15 +15,18 @@
 <div ng-controller="FooCtrl">
     <ul ta-count-watches>
         <li ng-repeat-start="row in rows track by row.rowId">{{ row.name }}</li>
-        <li ng-repeat-end>{{ row.total }}</li>
+        <li>{{ row.total }}</li>
+        <li ng-repeat-end><button ng-click="removeRow($index)">Remove</button></li>
     </ul>
 
     <ul ta-count-watches>
         <li ng-repeat-start="row in rows track by row.rowId" repeat-detached>{{ row.name }}</li>
         <li>{{ row.total }}</li>
+        <li><button ng-click="removeRow($index)">Remove</button></li>
         <li ng-repeat-end><button ng-click="update($index)">Update</button></li>
     </ul>
     <button ng-click="update()">Update all</button>
+    <button ng-click="addRow()">Add row</button>
 </div>
 
 

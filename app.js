@@ -33,7 +33,7 @@
 
             var $index = 0;
             $interval(function() {
-                $scope.rows[$index%4].total++;
+                $scope.rows[$index%$scope.rows.length].total++;
                 $index++;
             }, 1000);
 
@@ -41,6 +41,14 @@
                 $timeout(function() {
                     $scope.$broadcast('digest', index);
                 });
+            };
+
+            $scope.addRow = function() {
+                $scope.rows.push(_generateRow('foo' + $index));
+            };
+
+            $scope.removeRow = function($index) {
+                $scope.rows.splice($index, 1);
             };
         }])
         .directive('taCountWatches', [function() {
@@ -88,11 +96,15 @@
                         original$New = new$Scope.$new;
 
                         new$Scope.$new = function () {
-                            var childScope = original$New.apply(new$Scope, Array.prototype.slice.call(arguments));
+                            var childScope = original$New.apply(new$Scope, Array.prototype.slice.call(arguments)),
+                                detachedScope;
+
                             childScope.$new = original$New;
 
-                            var detachedScope = childScope.$new();
-
+                            detachedScope  = childScope.$new();
+                            detachedScope.$on('$destroy', function() {
+                                childScope.$destroy();
+                            });
 
                             childScope.$on('digest', function (event, index) {
                                 if (angular.isUndefined(index) || index === detachedScope.$index) {
