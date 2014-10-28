@@ -22,7 +22,7 @@
             };
         };
 
-    angular.module('myApp', [])
+    angular.module('dpApp', [])
         .controller('FooCtrl', ['$scope', '$timeout', '$interval', function($scope, $timeout, $interval) {
             $scope.rows = [
                 _generateRow('foo'),
@@ -39,7 +39,7 @@
 
             $scope.update = function(index) {
                 $timeout(function() {
-                    $scope.$broadcast('digest', index);
+                    $scope.$broadcast('repeat-digest-row', index);
                 });
             };
 
@@ -51,7 +51,56 @@
                 $scope.rows.splice($index, 1);
             };
         }])
-        .directive('taCountWatches', [function() {
+        .factory('eventSubscriberFactory', ['$q', function($q) {
+            return function() {
+                var listeners = [], result;
+
+                result = function(cb) {
+                    if (angular.isFunction(cb)) {
+                        listeners.push(cb);
+
+                        return function() {
+                            listeners.splice(_.indexOf(listeners, cb), 1);
+                        };
+                    }
+
+                    return angular.noop;
+                };
+
+                var _getArgs = function(args) {
+                    return Array.prototype.slice.call(args, 0, args.length);
+                };
+
+                result.triggerAll = function() {
+                    var args = _getArgs(arguments);
+
+                    angular.forEach(listeners, function(listener) {
+                        listener.apply(listener, args);
+                    });
+                };
+
+                result.triggerAllAsPromise = function() {
+                    var args = _getArgs(arguments);
+
+                    return $q.all(_.map(listeners, function(listener) {
+                        return $q.when(listener.apply(listener, args));
+                    }));
+                };
+
+                result.listenerCount = function() {
+                    return listeners.length;
+                };
+
+                return result;
+            };
+        }])
+        .directive('dpCountWatches', ['eventSubscriberFactory', '$window', function(eventSubscriberFactory, $window) {
+
+            var watchCounters = eventSubscriberFactory();
+
+            // Expose it on the window object so we can access it in the terminal.
+            $window.dpApp = $window.dpApp || {};
+            $window.dpApp.countWatches = watchCounters.triggerAll;
 
             return {
                 'restrict': 'A',
@@ -70,15 +119,13 @@
                         return $watches;
                     };
 
-                    $scope.$parent.$watch(function() {
-                        return _calcWatches($scope);
-                    }, function(nbWatches) {
-                        if (angular.isNumber(nbWatches)) {
-                            console.log($element, nbWatches);
-                        }
+                    var unwatch = watchCounters(function() {
+                        console.log($element[0], _calcWatches($scope));
                     });
+
+                    $scope.$on('$destroy', unwatch);
                 }]
-            }
+            };
         }])
         .hackDirective('ngRepeat', ['$delegate', '$timeout', function($delegate, $timeout) {
             var ngRepeat = $delegate[0],
@@ -91,11 +138,11 @@
                         args =  Array.prototype.slice.call(arguments),
                         original$New;
 
-                    if ($attrs.hasOwnProperty('repeatDetached')) {
+                    if ($attrs.hasOwnProperty('repeatDetachedScope')) {
                         new$Scope = $scope.$new();
                         original$New = new$Scope.$new;
 
-                        new$Scope.$new = function () {
+                        new$Scope.$new = function() {
                             var childScope = original$New.apply(new$Scope, Array.prototype.slice.call(arguments)),
                                 detachedScope;
 
@@ -106,18 +153,34 @@
                                 childScope.$destroy();
                             });
 
-                            childScope.$on('digest', function (event, index) {
-                                if (angular.isUndefined(index) || index === detachedScope.$index) {
-                                    detachedScope.$digest();
+                            /**
+                             * condition can be the index or a function that receives the scope for manual checking
+                             */
+                            childScope.$on('repeat-digest-row', function (event, condition, force) {
+                                if (angular.isUndefined(condition)) {
+                                    condition = angular.identity.bind(undefined, true);
+                                } else if (angular.isNumber(condition)) {
+                                    var index = condition;
+                                    condition = function() {
+                                        return index === detachedScope.$index;
+                                    };
+                                }
+
+                                if (false && angular.isUndefined(condition) || (angular.isFunction(condition) && condition(detachedScope))) {
+                                    if (detachedScope.$$phase) { // prevent digest in progess errors
+                                        if (force === true) {
+                                            $timeout(function() {
+                                                detachedScope.$digest();
+                                            });
+                                        }
+                                    } else {
+                                        detachedScope.$digest();
+                                    }
                                 }
                             });
 
-                            // @todo iets maken dat hem wel attached tot de initiele data is binnengekomen
-                            // watchen tot de property voor deze ngRepeat ene keer defined geweest is?
-                            // kan misschien beter ... misschien evalAsync
-                            // for now just digest one time in the next digestCycle :)
-                            $timeout(function() {
-                                childScope.$$childHead = childScope.$$childTail = null;
+                            childScope.$$postDigest(function() {
+                                childScope.$$childHead = childScope.$$childTail = null; // detach after initial digest
                             });
 
                             return detachedScope;
